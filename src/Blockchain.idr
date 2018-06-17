@@ -12,7 +12,7 @@ import Data.Hash
    I plan on trying to covert this to use
      https://github.com/idris-hackers/idris-crypto
 
-   This module implements Blockchain (cryptographic linked list) that provides
+   This module implements blockchain (cryptographic linked list) that provides
    type level guarantee of cryptographic correctness of hashes.
    It does not implement anything else (P2P networking, payloads stored in chain, 
    consensus protocol, etc).
@@ -135,7 +135,7 @@ computeHash (MkBlock p) = blockHash p
 computeHash Genesis = GenesisFn ()
 computeHash (block1 >>= fn) = computeHash (fn (extractPayload block1))
 
-namespace Blockchain
+namespace HBlockchain
   ||| This blockchain allows heterogeneous blocks with different payloads and different
   ||| (payload dependent) hashing algorithms.  
   ||| The crypto-correctness of the chain is guaranteed by the type.
@@ -143,22 +143,22 @@ namespace Blockchain
   ||| This blockchain maintains the 'running' last block hash
   ||| @ payloads the type level list of payload types does not buy me much except for 
   ||| having a simple extractPayloads function
-  data Blockchain : (payloads : List Type) -> BlockHash -> Type where
-       Single : Block () 0 GenesisFn -> Blockchain [()] GenesisHash
-       (::) : (block : Block a h1 hash_fn) -> Blockchain ax h1 -> Blockchain (a::ax) (hash_fn (extractPayload block))
+  data HBlockchain : (payloads : List Type) -> BlockHash -> Type where
+       Single : Block () 0 GenesisFn -> HBlockchain [()] GenesisHash
+       (::) : (block : Block a h1 hash_fn) -> HBlockchain ax h1 -> HBlockchain (a::ax) (hash_fn (extractPayload block))
 
-extractPayloads : Blockchain payloads hs -> HList payloads 
+extractPayloads : HBlockchain payloads hs -> HList payloads 
 extractPayloads (Single g) = () :: HNil
 extractPayloads (block :: chain) =  (extractPayload block) :: extractPayloads chain
 
-AsList (HList payloads) b => AsList (Blockchain payloads hs) b where 
+AsList (HList payloads) b => AsList (HBlockchain payloads hs) b where 
    asList = asList . extractPayloads
 
-extractPrevHashes : Blockchain payloads hs -> List BlockHash 
+extractPrevHashes : HBlockchain payloads hs -> List BlockHash 
 extractPrevHashes (Single g) = [0]
 extractPrevHashes (block :: chain) = (extractPrevHash block) :: extractPrevHashes chain
 
-computeHashes : Blockchain payloads hs -> List BlockHash 
+computeHashes : HBlockchain payloads hs -> List BlockHash 
 computeHashes (Single g) = [GenesisFn ()]
 computeHashes (block :: chain) = (computeHash block) :: computeHashes chain
 
@@ -166,5 +166,5 @@ computeHashes (block :: chain) = (computeHash block) :: computeHashes chain
 -- Examples
 -- for example usage see `Test.Blockchain` module
 -------------------------------
-exampleMiner : BlockData a => (payload : a) -> Blockchain ax (prevHash payload) -> Blockchain (a :: ax) (blockHash payload)
+exampleMiner : BlockData a => (payload : a) -> HBlockchain ax (prevHash payload) -> HBlockchain (a :: ax) (blockHash payload)
 exampleMiner payload chain =  (MkBlock payload) :: chain 

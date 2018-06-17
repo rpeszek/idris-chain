@@ -31,11 +31,11 @@ BlockData TestNatBlock where
 
 ||| Note this is very tightly typed requiring consecutive numbers so stuff like this 
 ||| ```idris example
-|||  natChain1 : Blockchain [TestNatBlock, TestNatBlock, ()] (blockHash (MkTestNatBlock 1))
+|||  natChain1 : HBlockchain [TestNatBlock, TestNatBlock, ()] (blockHash (MkTestNatBlock 1))
 |||  natChain1 = exampleMiner (MkTestNatBlock 1) (exampleMiner (MkTestNatBlock 1) (Single Genesis))
 ||| ```
 |||will not compile
-natChain : Blockchain [TestNatBlock, TestNatBlock, ()] (blockHash (MkTestNatBlock 1))
+natChain : HBlockchain [TestNatBlock, TestNatBlock, ()] (blockHash (MkTestNatBlock 1))
 natChain = exampleMiner (MkTestNatBlock 1) (exampleMiner (MkTestNatBlock 0) (Single Block.Genesis))
 
 testHashes : IO ()
@@ -90,7 +90,7 @@ testMsgSimpleChain1Hash =
         (h ** _) => assertEq h (strHash "16FC397CF62F64D3:Hello") 
 
 
-mixedChain : (h ** Blockchain [MsgBlock, TestNatBlock, ()] h)
+mixedChain : (h ** HBlockchain [MsgBlock, TestNatBlock, ()] h)
 mixedChain = (_ ** exampleMiner (MkMsgBlock (strHash "0") "Hello") (exampleMiner (MkTestNatBlock 0) (Single Block.Genesis)))
 
 testMixedChain1Hash : IO()
