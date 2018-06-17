@@ -1,7 +1,16 @@
 package idris-chain
 
+sourceloc  = git://git@github.com:ziman/lightyear.git
+
+
 modules = Main
          , Blockchain
+         , Test.Asserts
+         , Test.Blockchain
+
+tests = Test.Blockchain.testHashes
+       , Test.Blockchain.testPayloads
+       , Test.Blockchain.testSimpleHash
 
 sourcedir = src
 main = Main

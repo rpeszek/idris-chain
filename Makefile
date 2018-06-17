@@ -11,3 +11,6 @@ install: build
 
 build: 
 	idris --build idris-chain.ipkg
+
+test: 
+	idris --testpkg idris-chain.ipkg
