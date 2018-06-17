@@ -1,0 +1,10 @@
+package idris-chain
+
+modules = Main
+         , Blockchain
+
+sourcedir = src
+main = Main
+executable = idrisChain
+
+opts = "-p contrib"
