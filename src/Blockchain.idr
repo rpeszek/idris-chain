@@ -14,7 +14,8 @@ import Data.Hash
 
    This module implements Blockchain (cryptographic linked list) that provides
    type level guarantee of cryptographic correctness of hashes.
-   It does not implement anything else (P2P networking, payloads stored in chain, etc).
+   It does not implement anything else (P2P networking, payloads stored in chain, 
+   consensus protocol, etc).
 -}
 
 ------------------------------
@@ -28,29 +29,46 @@ namespace HList
 
 
 --------------------
--- DSL
+-- DSLs
 --------------------
 
 BlockHash : Type
 BlockHash = Bits64
 
+GenesisHash : Bits64
+GenesisHash = hash () 
+
 GenesisFn : () -> BlockHash 
 GenesisFn = hash -- (const (hash ())) 
 
-||| `Block payload hash hash_fn` looks like a dependently typed indexed monad.
-||| For simplicity, the payload is assumed to store hash of the linked block
-|||  @ payload payload type 
+||| Conceptual code does not want to concern itself with particulars
+||| of how this is done
+interface BlockData a where
+    myHash : a -> BlockHash 
+    prevHash : a -> BlockHash
+
+--------------------------------
+-- Simple homogenious blockchain 
+--------------------------------
+
+namespace SimpleBlockchain
+  data SimpleBlockchain : (payload : Type) -> (hash : BlockHash) -> Type where 
+     Genesis : SimpleBlockchain a GenesisHash
+     (::) : BlockData a => (payload : a) -> SimpleBlockchain a (prevHash payload) -> SimpleBlockchain a (myHash payload) 
+
+--------------------------------------------------
+-- Heterogenous blockchain with varying payloads 
+-- Can blockchain be general purpose and store various types of payloads?
+-------------------------------------------------- 
+
+-- TODO this is getting better but still needs more thinking
+
+||| `Block payload hash hash_fn` looks like standard dependently typed indexed monad.
+|||  @ payload that contains previous hash and can be hashed (satisfies BlockData contraint) 
 |||  @ hash links previous block
 |||  @ hash_fn hash function that knows how to sign the payload
 data Block : (payload : Type) -> (hash: BlockHash) -> (hash_fn : payload -> BlockHash) -> Type where
-    ||| To be cryptgraphically kosher payload needs to include linked block hash information 
-    ||| represented here as `extract_fn`, `sig` knows how to sign the payload
-    ||| A possibly more straightforward idea is to introduce a BlockHeader 
-    ||| record that is hashing friendly/Hashable instead of `extract_fn`.
-    ||| @ payload 
-    ||| @ extract_fn when applied to payload extract hash of linked block
-    ||| @ sig function that computes hash of this payload
-    MkBlock : (payload : a) -> (extract_fn : a -> BlockHash) -> (sig : a -> BlockHash) -> Block a (extract_fn payload) sig
+    MkBlock : BlockData a => (payload : a) -> Block a (prevHash payload) myHash
     
     Genesis : Block () 0 GenesisFn 
     ||| This is currently not used, 
@@ -61,17 +79,17 @@ data Block : (payload : Type) -> (hash: BlockHash) -> (hash_fn : payload -> Bloc
             Block b (hash2_fn payload) hash3_fn
 
 getPayload : Block a h hash_fn -> a
-getPayload (MkBlock p ef hf) = p
+getPayload (MkBlock p) = p
 getPayload Genesis = ()
 getPayload (block1 >>= fn) = getPayload (fn (getPayload block1))
 
-extractHash : Block a h hash_fn -> BlockHash
-extractHash (MkBlock p ef hf) = ef p
-extractHash Genesis = 0
-extractHash (block1 >>= fn) = extractHash (fn (getPayload block1))
+extractPrevHash : Block a h hash_fn -> BlockHash
+extractPrevHash (MkBlock p) = prevHash p
+extractPrevHash Genesis = 0
+extractPrevHash (block1 >>= fn) = extractPrevHash (fn (getPayload block1))
 
 computeHash : Block a h hash_fn -> BlockHash
-computeHash (MkBlock p ef hf) = hf p
+computeHash (MkBlock p) = myHash p
 computeHash Genesis = GenesisFn ()
 computeHash (block1 >>= fn) = computeHash (fn (getPayload block1))
 
@@ -90,9 +108,9 @@ extractPayloads : Blockchain payloads hs -> HList payloads
 extractPayloads (BNil g) = () :: HNil
 extractPayloads (block :: chain) =  (getPayload block) :: extractPayloads chain
 
-extractHashes : Blockchain payloads hs -> List BlockHash 
-extractHashes (BNil g) = [0]
-extractHashes (block :: chain) = (extractHash block) :: extractHashes chain
+extractPrevHashes : Blockchain payloads hs -> List BlockHash 
+extractPrevHashes (BNil g) = [0]
+extractPrevHashes (block :: chain) = (extractPrevHash block) :: extractPrevHashes chain
 
 computeHashes : Blockchain payloads hs -> List BlockHash 
 computeHashes (BNil g) = [GenesisFn ()]
@@ -101,17 +119,25 @@ computeHashes (block :: chain) = (computeHash block) :: computeHashes chain
 -------------------------------
 -- examples, TODO setup package management and move this to tests
 -------------------------------
-exampleMiner : Hashable a => (extract_fn : a -> BlockHash) -> (payload : a) -> Blockchain ax (extract_fn payload) -> Blockchain (a :: ax) (hash payload)
-exampleMiner extract_fn payload chain =  (MkBlock payload extract_fn hash) :: chain 
+exampleMiner : BlockData a => (payload : a) -> Blockchain ax (prevHash payload) -> Blockchain (a :: ax) (myHash payload)
+exampleMiner payload chain =  (MkBlock payload) :: chain 
 
 ||| assumes i is linked to (i - 1)
-testExtract : Int -> BlockHash
-testExtract 1 = GenesisFn ()
-testExtract i = hash (i - 1)
+testPrevInt : Int -> BlockHash
+testPrevInt 1 = GenesisHash
+testPrevInt i = hash (i - 1)
+
+||| assumes i is linked to (i - 1)
+BlockData Int where
+   myHash i = hash i
+   prevHash = testPrevInt
+
+testSimple : SimpleBlockchain Int (myHash (the Int 2))
+testSimple = (the Int 2) :: (the Int 1) :: SimpleBlockchain.Genesis
 
 test : List BlockHash 
 test =  
-     let chain = exampleMiner testExtract 2 (exampleMiner testExtract 1 (BNil Genesis))
+     let chain = exampleMiner (the Int 2) (exampleMiner (the Int 1) (BNil Genesis))
      in computeHashes chain 
 
 {- repl:
@@ -123,5 +149,5 @@ test =
 
 test2 : HList [Int, Int, ()] 
 test2 =  
-     let chain = exampleMiner testExtract 2 (exampleMiner testExtract 1 (BNil Genesis))
+     let chain = exampleMiner (the Int 2) (exampleMiner (the Int 1) (BNil Genesis))
      in extractPayloads chain 
