@@ -19,27 +19,45 @@ import Data.Hash
 -}
 
 ------------------------------
---- HList needed as a utilitity
+--- HList and other utilitities
 ------------------------------
 namespace HList
   infixr 7 ::
   data HList : List Type -> Type where
     HNil : HList []
     (::) : t -> HList ts -> HList (t :: ts)
+
   ||| Show instance is used for testing
   Show (HList []) where 
      show x = "HNil"
   (Show a, Show (HList xs)) => Show (HList (a :: xs)) where
      show (t :: xt) = (show t) ++ "::" ++ (show xt)
+  
+||| Testing convenience class
+||| ```idris example
+|||  the (List String) (asList ("2" :: 1 :: HNil))
+||| ```
+||| Interstingly doing something similar with Monoids 
+||| does not seem to go far  
+interface AsList a b where 
+   asList : a -> List b
+AsList (HList []) b where
+   asList = const []
+(AsList (HList xs) b, Cast a b) => AsList (HList (a :: xs)) b where 
+   asList (t :: xt) = (cast t) :: (asList xt)
+||| Idris does not have this 
+||| https://github.com/idris-lang/Idris-dev/issues/3479
+Cast a a where
+   cast = id
 
---------------------
--- DSLs
---------------------
+-----------------------------------------------
+-- Temporary non-crypto hashing abstracted out
+-----------------------------------------------
 
 BlockHash : Type
 BlockHash = Bits64
 
-GenesisHash : Bits64
+GenesisHash : BlockHash
 GenesisHash = hash () 
 
 GenesisFn : () -> BlockHash 
@@ -47,6 +65,10 @@ GenesisFn = hash -- (const (hash ()))
 
 strHash : String -> BlockHash
 strHash = hash
+
+--------------------
+-- DSLs
+--------------------
 
 ||| Conceptual code does not want to concern itself with particulars
 ||| of how this is done. The implementation of this interface is assumed 
@@ -58,7 +80,8 @@ interface BlockData a where
     blockHash = strHash . serialize
     prevHash : a -> BlockHash
 
--- Interestingly things stop compiling if blockHash method is moved out!
+-- Interestingly things stop compiling if blockHash method is moved out from
+-- the interface!
 -- blockHash : BlockData a => a -> BlockHash 
 -- blockHash = strHash . serialize
 
@@ -80,7 +103,8 @@ namespace SimpleBlockchain
 -- TODO this is getting better but still needs more thinking
 
 namespace Block
-  ||| `Block payload hash hash_fn` looks like standard dependently typed indexed monad.
+  ||| `Block payload hash hash_fn` looks like standard dependently typed 
+  |||  indexed monad (or state machine).
   |||  @ payload that contains previous hash and can be hashed (satisfies BlockData contraint) 
   |||  @ hash links previous block
   |||  @ hash_fn hash function that knows how to sign the payload
@@ -89,26 +113,27 @@ namespace Block
       
       Genesis : Block () 0 GenesisFn 
       ||| This is currently not used, 
-      ||| monadic function verifies previous payload (payload : a) and exposes proof of that verification
-      ||| (hash2_fn payload) as well as provides hash function that works on its own payload.
+      ||| monadic function verifies (on type level) previous payload hash (payload : a) and 
+      ||| exposes proof of that verification (hash2_fn payload) 
+      ||| as well as provides hash function that works on its own payload.
       (>>=) : Block a hash1 hash2_fn ->
               ((payload : a) -> Block b (hash2_fn payload) hash3_fn) ->
               Block b (hash2_fn payload) hash3_fn
 
-getPayload : Block a h hash_fn -> a
-getPayload (MkBlock p) = p
-getPayload Genesis = ()
-getPayload (block1 >>= fn) = getPayload (fn (getPayload block1))
+extractPayload : Block a h hash_fn -> a
+extractPayload (MkBlock p) = p
+extractPayload Genesis = ()
+extractPayload (block1 >>= fn) = extractPayload (fn (extractPayload block1))
 
 extractPrevHash : Block a h hash_fn -> BlockHash
 extractPrevHash (MkBlock p) = prevHash p
 extractPrevHash Genesis = 0
-extractPrevHash (block1 >>= fn) = extractPrevHash (fn (getPayload block1))
+extractPrevHash (block1 >>= fn) = extractPrevHash (fn (extractPayload block1))
 
 computeHash : Block a h hash_fn -> BlockHash
 computeHash (MkBlock p) = blockHash p
 computeHash Genesis = GenesisFn ()
-computeHash (block1 >>= fn) = computeHash (fn (getPayload block1))
+computeHash (block1 >>= fn) = computeHash (fn (extractPayload block1))
 
 namespace Blockchain
   ||| This blockchain allows heterogeneous blocks with different payloads and different
@@ -119,12 +144,15 @@ namespace Blockchain
   ||| @ payloads the type level list of payload types does not buy me much except for 
   ||| having a simple extractPayloads function
   data Blockchain : (payloads : List Type) -> BlockHash -> Type where
-       Single : Block () 0 GenesisFn -> Blockchain [()] (GenesisFn ())
-       (::) : (block : Block a h1 hash_fn) -> Blockchain ax h1 -> Blockchain (a::ax) (hash_fn (getPayload block))
+       Single : Block () 0 GenesisFn -> Blockchain [()] GenesisHash
+       (::) : (block : Block a h1 hash_fn) -> Blockchain ax h1 -> Blockchain (a::ax) (hash_fn (extractPayload block))
 
 extractPayloads : Blockchain payloads hs -> HList payloads 
 extractPayloads (Single g) = () :: HNil
-extractPayloads (block :: chain) =  (getPayload block) :: extractPayloads chain
+extractPayloads (block :: chain) =  (extractPayload block) :: extractPayloads chain
+
+AsList (HList payloads) b => AsList (Blockchain payloads hs) b where 
+   asList = asList . extractPayloads
 
 extractPrevHashes : Blockchain payloads hs -> List BlockHash 
 extractPrevHashes (Single g) = [0]

@@ -11,6 +11,8 @@ modules = Main
 tests = Test.Blockchain.testHashes
        , Test.Blockchain.testPayloads
        , Test.Blockchain.testSimpleHash
+       , Test.Blockchain.testMsgSimpleChain1Hash
+       , Test.Blockchain.testMixedChain1Hash
 
 sourcedir = src
 main = Main
