@@ -8,11 +8,11 @@ modules = Main
          , Test.Asserts
          , Test.Blockchain
 
-tests = Test.Blockchain.testHashes
-       , Test.Blockchain.testPayloads
-       , Test.Blockchain.testSimpleHash
+tests = Test.Blockchain.testNatHashes
+       , Test.Blockchain.testNatPayloads
+       , Test.Blockchain.testNatSimpleHash
        , Test.Blockchain.testMsgSimpleChain1Hash
-       , Test.Blockchain.testMixedChain1Hash
+       , Test.Blockchain.testMixedChainHash
 
 sourcedir = src
 main = Main

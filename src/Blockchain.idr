@@ -144,13 +144,14 @@ namespace HBlockchain
   ||| @ payloads the type level list of payload types does not buy me much except for 
   ||| having a simple extractPayloads function
   data HBlockchain : (payloads : List Type) -> BlockHash -> Type where
-       Single : Block () 0 GenesisFn -> HBlockchain [()] GenesisHash
+       Single : Block () 0 GenesisFn -> HBlockchain [] GenesisHash
        (::) : (block : Block a h1 hash_fn) -> HBlockchain ax h1 -> HBlockchain (a::ax) (hash_fn (extractPayload block))
 
 extractPayloads : HBlockchain payloads hs -> HList payloads 
-extractPayloads (Single g) = () :: HNil
+extractPayloads (Single g) = HNil
 extractPayloads (block :: chain) =  (extractPayload block) :: extractPayloads chain
 
+||| Untyping convenient for testing
 AsList (HList payloads) b => AsList (HBlockchain payloads hs) b where 
    asList = asList . extractPayloads
 
